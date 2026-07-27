@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "watch-and-copy-shell",
+      "type": "shell",
+      "isBackground": true,
+      "command": "${workspaceFolder}/.vscode/copy-watcher.sh \"${workspaceFolder}\"",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
