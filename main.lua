@@ -141,8 +141,8 @@ Ethos gibt jedem Widget nur rund 190 Zeichen. Da muessen ALLE \z
 Bilddateinamen, Flugphasen und Schalter zusammen hineinpassen. Bei \z
 10 Regeln bleiben pro Regel nur etwa 15 Zeichen, davon gehen einige \z
 fuer Flugphasen und Trennzeichen ab.\n\n\z
-Halte die Dateinamen deshalb kurz: \"thermik.bmp\" statt \z
-\"segelflug_phase_thermik.bmp\". Sonst gehen beim Speichern still \z
+Halte die Dateinamen deshalb kurz: \"LkwFahr.bmp\" statt \z
+\"LKW_Scania_Fahrmodus_1.bmp\". Sonst gehen beim Speichern still \z
 die zuletzt geschriebenen Werte verloren - zuerst die Schalter.\n\n\z
 Der aktuelle Verbrauch steht unter Widget-Informationen. Erscheint \z
 dort ein \"!\", passt es nicht mehr.",
