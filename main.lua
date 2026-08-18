@@ -456,6 +456,7 @@ local function create()
         fmSource        = fmSource,
         activeFm        = 0,    -- INDEX des aktuell aktiven Flugmodus
         activeRuleIndex = nil,  -- Index der aktuell greifenden Regel (nil = Fallback)
+        activeBitmap    = nil,  -- zuletzt zur Anzeige bestimmtes Bitmap
         loaded          = false,-- true, sobald read() gelaufen ist
         everConfigured  = false,-- true, sobald der Nutzer etwas geaendert hat
     }
@@ -868,7 +869,9 @@ local function read(widget)
     widget.cache           = {}
     widget.activeRuleIndex = nil
     widget.activeFm        = 0
+    widget.activeBitmap    = nil
     widget.loaded          = true
+    lcd.invalidate()
     return true
 end
 
@@ -946,8 +949,15 @@ local function wakeup(widget)
         end
     end
 
-    if newRuleIndex ~= widget.activeRuleIndex then
+    local selectedBitmap = widget.fallbackImage
+    if newRuleIndex and widget.rules[newRuleIndex] then
+        selectedBitmap = widget.rules[newRuleIndex].image
+    end
+
+    if newRuleIndex ~= widget.activeRuleIndex
+        or selectedBitmap ~= widget.activeBitmap then
         widget.activeRuleIndex = newRuleIndex
+        widget.activeBitmap    = selectedBitmap
         lcd.invalidate()
     end
 end
