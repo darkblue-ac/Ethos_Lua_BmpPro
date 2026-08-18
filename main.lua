@@ -871,7 +871,6 @@ local function read(widget)
     widget.activeFm        = 0
     widget.activeBitmap    = nil
     widget.loaded          = true
-    lcd.invalidate()
     return true
 end
 
