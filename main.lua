@@ -242,6 +242,15 @@ local function buildPath(filename)
     return BMP_PATH .. "/" .. filename
 end
 
+-- resetBitmaps(widget)
+-- Verwirft alle geladenen Bitmaps. Danach laedt wakeup() das aktuelle
+-- Bild neu und zeichnet neu, weil sich das Bitmap-Objekt aendert.
+local function resetBitmaps(widget)
+    widget.cache     = {}
+    widget.failedAt  = {}
+    widget.activeBmp = nil
+end
+
 -- splitString(str, sep)
 -- Zerlegt einen String an einem festen Trennzeichen. Anders als
 -- string.gmatch bleiben LEERE Felder erhalten - das ist fuer das
@@ -452,11 +461,12 @@ local function create()
         rules           = {},   -- geordnete Liste von Regeln
         fallbackImage   = "",   -- Bild, wenn keine Regel passt
         cache           = {},   -- [dateipfad] = geladenes Bitmap-Objekt
+        failedAt        = {},   -- [dateipfad] = Zeitpunkt des letzten Fehlversuchs
         fmList          = {},   -- Liste { index=<n>, name=<Name> } der bekannten Flugmodi
         fmSource        = fmSource,
         activeFm        = 0,    -- INDEX des aktuell aktiven Flugmodus
         activeRuleIndex = nil,  -- Index der aktuell greifenden Regel (nil = Fallback)
-        activeBitmap    = nil,  -- zuletzt zur Anzeige bestimmtes Bitmap
+        activeBmp       = nil,  -- Bitmap-Objekt, das paint() gerade zeichnet
         loaded          = false,-- true, sobald read() gelaufen ist
         everConfigured  = false,-- true, sobald der Nutzer etwas geaendert hat
     }
@@ -498,8 +508,7 @@ function configure(widget)
         function(v)
             widget.fallbackImage   = v
             widget.everConfigured  = true
-            widget.cache = {}
-            lcd.invalidate()
+            resetBitmaps(widget)
         end)
 
     for i = 1, #widget.rules do
@@ -592,8 +601,7 @@ function configure(widget)
                 function(v)
                     rule.image            = v
                     widget.everConfigured = true
-                    widget.cache = {}
-                    lcd.invalidate()
+                    resetBitmaps(widget)
                 end)
 
             -- "Alle Flugphasen" blendet die Flugphasen-Liste ein/aus,
@@ -866,10 +874,9 @@ local function read(widget)
     -- gespeichert; sie erscheinen als "FM<n>" bis zum ersten Auftreten)
     ensureRulePhasesListed(widget)
 
-    widget.cache           = {}
+    resetBitmaps(widget)
     widget.activeRuleIndex = nil
     widget.activeFm        = 0
-    widget.activeBitmap    = nil
     widget.loaded          = true
     return true
 end
@@ -906,6 +913,40 @@ end
 -- ------------------------------------------------------------
 -- Laufzeit
 -- ------------------------------------------------------------
+
+-- loadCached(widget, filename)
+-- Laedt ein Bitmap und haelt es im Cache. Schluessel ist der
+-- DATEIPFAD und nicht der Regel-Index - sonst wuerde nach dem
+-- Verschieben einer Regel das Bild der alten Position weiterbenutzt.
+--
+-- Ein Fehlversuch wird NICHT dauerhaft gemerkt, sondern nach
+-- RETRY_S Sekunden wiederholt. Auf dem Top-Display der Tandem XE
+-- erschien ein frisch gewaehltes Bild frueher erst nach Modellwechsel
+-- oder Neustart - also erst, wenn read() den Cache geleert hatte.
+-- Genau so wirkt ein gemerkter Fehlversuch aus der Zeit, in der die
+-- Bildauswahl noch offen war.
+local RETRY_S = 2
+
+local function loadCached(widget, filename)
+    local fullPath = buildPath(filename)
+    if fullPath == nil then return nil end
+
+    local bmp = widget.cache[fullPath]
+    if bmp ~= nil then return bmp end
+
+    local now  = os.clock()
+    local last = widget.failedAt[fullPath]
+    if last and now - last < RETRY_S then return nil end
+
+    local ok, b = pcall(function() return lcd.loadBitmap(fullPath) end)
+    if ok and b ~= nil then
+        widget.cache[fullPath]    = b
+        widget.failedAt[fullPath] = nil
+        return b
+    end
+    widget.failedAt[fullPath] = now
+    return nil
+end
 
 -- wakeup(widget)
 -- Prüft regelmäßig Flugphase + Schalterbedingungen und ermittelt
@@ -948,41 +989,21 @@ local function wakeup(widget)
         end
     end
 
-    local selectedBitmap = widget.fallbackImage
+    local bmpName = widget.fallbackImage
     if newRuleIndex and widget.rules[newRuleIndex] then
-        selectedBitmap = widget.rules[newRuleIndex].image
+        bmpName = widget.rules[newRuleIndex].image
     end
+    local bmp = loadCached(widget, bmpName)
 
-    if newRuleIndex ~= widget.activeRuleIndex
-        or selectedBitmap ~= widget.activeBitmap then
+    -- Verglichen wird das Bitmap-OBJEKT, nicht der Dateiname: Nach
+    -- einer Bildauswahl ist der Cache leer, das neu geladene Objekt
+    -- ist ein anderes - also wird neu gezeichnet, auch wenn der Name
+    -- gleich geblieben ist oder das Laden erst im zweiten Anlauf klappt.
+    if newRuleIndex ~= widget.activeRuleIndex or bmp ~= widget.activeBmp then
         widget.activeRuleIndex = newRuleIndex
-        widget.activeBitmap    = selectedBitmap
+        widget.activeBmp       = bmp
         lcd.invalidate()
     end
-end
-
--- loadCached(widget, filename)
--- Laedt ein Bitmap und haelt es im Cache. Schluessel ist der
--- DATEIPFAD und nicht der Regel-Index - sonst wuerde nach dem
--- Verschieben einer Regel das Bild der alten Position weiterbenutzt.
-local function loadCached(widget, filename)
-    local fullPath = buildPath(filename)
-    if fullPath == nil then return nil end
-
-    widget.cache = widget.cache or {}
-    local entry = widget.cache[fullPath]
-    if entry == nil then
-        local ok, bmp = pcall(function() return lcd.loadBitmap(fullPath) end)
-        if ok and bmp ~= nil then
-            entry = bmp
-        else
-            entry = false   -- Fehlversuch merken, nicht bei jedem paint neu laden
-        end
-        widget.cache[fullPath] = entry
-    end
-
-    if entry == false then return nil end
-    return entry
 end
 
 -- paint(widget)
@@ -991,18 +1012,10 @@ local function paint(widget)
     local w, h = lcd.getWindowSize()
     local idx  = widget.activeRuleIndex
 
-    local bmpName
-    if idx and widget.rules[idx] then
-        bmpName = widget.rules[idx].image
-    else
-        bmpName = widget.fallbackImage
-    end
-
-    local bmp = nil
-    if bmpName and bmpName ~= "" then
-        bmp = loadCached(widget, bmpName)
-    end
-
+    -- Geladen wird nur in wakeup(); paint() zeichnet, was dort bestimmt
+    -- wurde. So loest erst ein erfolgreicher Ladevorgang das Neuzeichnen
+    -- aus, und paint() greift nie selbst auf die Karte zu.
+    local bmp = widget.activeBmp
     if bmp ~= nil then
         lcd.drawBitmap(0, 0, bmp, w, h)
     else
