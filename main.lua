@@ -126,6 +126,7 @@ local T = {
         infoVersion  = "Version",
         infoAuthor   = "Autor",
         infoStorage  = "Speicher (Zeichen)",
+        infoSize     = "Widget-Größe (Pixel)",
         helpLine     = "Hilfe",
         helpTitle    = "Hilfe",
         ok           = "OK",
@@ -170,6 +171,7 @@ dort ein \"!\", passt es nicht mehr.",
         infoVersion  = "Version",
         infoAuthor   = "Author",
         infoStorage  = "Storage (chars)",
+        infoSize     = "Widget size (pixels)",
         helpLine     = "Help",
         helpTitle    = "Help",
         ok           = "OK",
@@ -706,6 +708,14 @@ function configure(widget)
         local lPath = infoPanel:addLine(tr("imagesUnder"))
         form.addStaticText(lPath, nil, BMP_PATH)
 
+        -- Groesse, in der paint() zuletzt gezeichnet hat. Bilder in genau
+        -- dieser Groesse sparen Speicher und Ladezeit - ein Bild belegt
+        -- entpackt seine volle Pixelzahl, auch wenn es verkleinert
+        -- gezeichnet wird. "-", solange das Widget noch nie gezeichnet hat.
+        local lSize = infoPanel:addLine(tr("infoSize"))
+        form.addStaticText(lSize, nil, widget.paintW
+            and string.format("%d x %d", widget.paintW, widget.paintH) or "-")
+
         -- Speicherverbrauch. Ethos gibt jedem Widget nur wenige
         -- hundert Zeichen. Steht hier ein "!", passt die Konfiguration
         -- nicht mehr sicher hinein und die zuletzt geschriebenen Werte
@@ -1038,6 +1048,7 @@ end
 -- Rendert das Widget: Bild der aktiven Regel oder Fallback-Bild
 local function paint(widget)
     local w, h = lcd.getWindowSize()
+    widget.paintW, widget.paintH = w, h
     local idx  = widget.activeRuleIndex
 
     -- Geladen wird nur in wakeup(); paint() zeichnet, was dort bestimmt
