@@ -45,7 +45,7 @@
 --    steht im Abschnitt "Persistenz".
 --
 -- 2. DER SPEICHER IST SEHR KLEIN.
---    Gemessen mit test/BmpTest auf einer Tandem XE, Ethos 1.6.6:
+--    Gemessen mit einem eigenen Test-Widget auf einer Tandem XE, Ethos 1.6.6:
 --      - 218 Zeichen in 15 Werten kamen vollstaendig an, beim 16. Wert
 --        (233 Zeichen) gingen die zuletzt geschriebenen still verloren.
 --      - Ein einzelner Wert mit 120 Zeichen kam an, mit 190 nicht mehr.
@@ -805,7 +805,7 @@ end
 -- encodeSwitch(sw) / decodeSwitch(str)
 -- Ein Schalter wird als Kategorie, Nummer und Optionen gespeichert und
 -- mit system.getSource() wieder aufgebaut. Auf der Tandem XE geprueft
--- (test/BmpTest): "10.0" Schalterstellung, "10.24.1" dieselbe
+-- (eigenes Test-Widget): "10.0" Schalterstellung, "10.24.1" dieselbe
 -- invertiert, "13.4" logischer Schalter - der Nachbau lief jeweils
 -- identisch mit dem Original.
 --
