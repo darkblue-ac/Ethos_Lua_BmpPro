@@ -34,7 +34,8 @@ The widget evaluates a list of rules from top to bottom. The first rule whose co
 
 - **BMP must be 16-bit RGB565** (BI_BITFIELDS, masks `F800`/`07E0`/`001F`). Other BMP variants such as 24-bit are not accepted by ETHOS.
 - **PNG**: RGB, 8 bits per channel, no palette.
-- Create images in the size the widget draws them. The configuration shows it under *Widget information → Widget size*. A loaded image takes its full pixel count in memory, even when drawn smaller.
+- BMP draws faster than PNG (measured on a Tandem XE: 40 ms vs. 50 ms for a full-screen image).
+- Create images in the size the widget draws them. As long as no image is selected, the widget shows its size in pixels. A loaded image takes its full pixel count in memory, even when drawn smaller.
 
 ## Configuration
 

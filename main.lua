@@ -65,7 +65,7 @@ local MAX_RULES = 10   -- maximale Anzahl Regeln (nicht erhoehen: Storage-Limit!
 local BMP_PATH  = "/bitmaps/BmpPro"
 
 -- Widget-Metadaten (fuer den Info-Bereich in der Konfiguration)
-local SCRIPT_VERSION = "1.0.0"
+local SCRIPT_VERSION = "1.0.2"
 local SCRIPT_AUTHOR  = "Stefan Tippl"
 local GITHUB_REPO    = "darkblue-ac/Ethos_Lua_BmpPro"
 
@@ -123,7 +123,6 @@ local T = {
         infoVersion  = "Version",
         infoAuthor   = "Autor",
         infoStorage  = "Speicher (Zeichen)",
-        infoSize     = "Widget-Größe (Pixel)",
         helpLine     = "Hilfe",
         helpTitle    = "Hilfe",
         ok           = "OK",
@@ -146,7 +145,11 @@ Halte die Dateinamen deshalb kurz: \"LkwFahr.bmp\" statt \z
 \"LKW_Scania_Fahrmodus_1.bmp\". Sonst gehen beim Speichern still \z
 die letzten Regeln verloren.\n\n\z
 Der aktuelle Verbrauch steht unter Widget-Informationen. Erscheint \z
-dort ein \"!\", passt es nicht mehr.",
+dort ein \"!\", passt es nicht mehr.\n\n\z
+BILDER:\n\z
+BMP als 16 Bit RGB565 - zeichnet schneller als PNG. Am besten genau \z
+in Widget-Groesse anlegen: Das spart Speicher und Rechenzeit. Solange \z
+kein Bild gewaehlt ist, zeigt das Widget seine Groesse in Pixeln an.",
         noBitmap     = ": kein Bitmap",
         ruleWord     = "Regel",
         fallbackWord = "Fallback",
@@ -169,7 +172,6 @@ dort ein \"!\", passt es nicht mehr.",
         infoVersion  = "Version",
         infoAuthor   = "Author",
         infoStorage  = "Storage (chars)",
-        infoSize     = "Widget size (pixels)",
         helpLine     = "Help",
         helpTitle    = "Help",
         ok           = "OK",
@@ -192,7 +194,11 @@ So keep file names short: \"thermal.bmp\" instead of \z
 \"glider_phase_thermal.bmp\". Otherwise the last rules are \z
 silently lost when saving.\n\n\z
 Current usage is shown under Widget information. A \"!\" there means \z
-it no longer fits.",
+it no longer fits.\n\n\z
+IMAGES:\n\z
+BMP as 16-bit RGB565 - draws faster than PNG. Ideally make images \z
+exactly the widget size: this saves memory and drawing time. As long \z
+as no image is selected, the widget shows its size in pixels.",
         noBitmap     = ": no bitmap",
         ruleWord     = "Rule",
         fallbackWord = "Fallback",
@@ -712,14 +718,6 @@ function configure(widget)
         local lPath = infoPanel:addLine(tr("imagesUnder"))
         form.addStaticText(lPath, nil, BMP_PATH)
 
-        -- Groesse, in der paint() zuletzt gezeichnet hat. Bilder in genau
-        -- dieser Groesse sparen Speicher und Ladezeit - ein Bild belegt
-        -- entpackt seine volle Pixelzahl, auch wenn es verkleinert
-        -- gezeichnet wird. "-", solange das Widget noch nie gezeichnet hat.
-        local lSize = infoPanel:addLine(tr("infoSize"))
-        form.addStaticText(lSize, nil, widget.paintW
-            and string.format("%d x %d", widget.paintW, widget.paintH) or "-")
-
         -- Speicherverbrauch. Ethos gibt jedem Widget nur wenige
         -- hundert Zeichen. Steht hier ein "!", passt die Konfiguration
         -- nicht mehr sicher hinein und die zuletzt geschriebenen Werte
@@ -1126,7 +1124,6 @@ end
 -- Rendert das Widget: Bild der aktiven Regel oder Fallback-Bild
 local function paint(widget)
     local w, h = lcd.getWindowSize()
-    widget.paintW, widget.paintH = w, h
     local idx  = widget.activeRuleIndex
 
     -- Geladen wird nur in wakeup(); paint() zeichnet, was dort bestimmt
@@ -1141,7 +1138,15 @@ local function paint(widget)
         lcd.color(lcd.RGB(180, 180, 180))
         lcd.font(FONT_STD)
         local label = idx and (tr("ruleWord") .. " " .. idx) or tr("fallbackWord")
-        lcd.drawText(w / 2, h / 2, label .. tr("noBitmap"), CENTERED)
+        -- Darunter die Groesse, in der hier gezeichnet wird - die Groesse,
+        -- in der die Bilder am besten angelegt werden. Sie steht bewusst
+        -- auf dem Widget und nicht in der Konfiguration: Ethos ruft
+        -- paint() auch fuer die verkleinerte Vorschau unter "Bildschirm
+        -- Konfig" auf, und von innen ist nicht zu erkennen, welche der
+        -- beiden Groessen die echte ist. Auf dem Display selbst schon.
+        local _, th = lcd.getTextSize("A")
+        lcd.drawText(w / 2, h / 2 - th, label .. tr("noBitmap"), CENTERED)
+        lcd.drawText(w / 2, h / 2, string.format("%d x %d px", w, h), CENTERED)
     end
 end
 
