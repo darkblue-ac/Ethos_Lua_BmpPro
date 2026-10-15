@@ -30,6 +30,12 @@ The widget evaluates a list of rules from top to bottom. The first rule whose co
    - `/bitmaps/BmpPro/`
 4. Add the widget in ETHOS and configure your rules.
 
+## Image format
+
+- **BMP must be 16-bit RGB565** (BI_BITFIELDS, masks `F800`/`07E0`/`001F`). Other BMP variants such as 24-bit are not accepted by ETHOS.
+- **PNG**: RGB, 8 bits per channel, no palette.
+- Create images in the size the widget draws them. The configuration shows it under *Widget information → Widget size*. A loaded image takes its full pixel count in memory, even when drawn smaller.
+
 ## Configuration
 
 Each rule can be configured with:
