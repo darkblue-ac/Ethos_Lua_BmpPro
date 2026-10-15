@@ -8,8 +8,9 @@
 -- und logischer Verknuepfung.
 --
 -- Die Regeln werden von OBEN nach UNTEN geprueft. Die erste Regel,
--- deren Bedingungen erfuellt sind, bestimmt das Bild. Passt keine
--- Regel, erscheint das Standard-Bild.
+-- deren Bedingungen erfuellt sind, bestimmt das Bild. Regeln ohne
+-- Bild werden uebersprungen. Passt keine Regel, erscheint das
+-- Standard-Bild.
 --
 -- Konfiguration - eine Zeile je Regel, Details per [+] ausklappbar:
 --
@@ -134,8 +135,9 @@ Flugphasen: Ethos liefert nur die gerade aktive Phase. Damit alle \z
 Phasen zur Auswahl erscheinen, einmal alle Flugphasen am Sender \z
 durchschalten.\n\n\z
 Regeln werden von OBEN nach UNTEN geprueft. Die erste Regel, deren \z
-Bedingungen erfuellt sind, bestimmt das angezeigte Bild. Passt keine \z
-Regel, wird das Standard-Bild (Fallback) angezeigt.\n\n\z
+Bedingungen erfuellt sind, bestimmt das angezeigte Bild. Regeln ohne \z
+Bild werden uebersprungen. Passt keine Regel, wird das Standard-Bild \z
+(Fallback) angezeigt.\n\n\z
 SPEICHERPLATZ - WICHTIG:\n\z
 Ethos gibt jedem Widget nur rund 190 Zeichen. Da muessen ALLE \z
 Bilddateinamen, Flugphasen und Schalter zusammen hineinpassen. Bei \z
@@ -178,7 +180,8 @@ all modes appear for selection, cycle through every flight mode on \z
 the radio once.\n\n\z
 Rules are checked from TOP to BOTTOM. The first rule whose conditions \z
 are met determines the displayed image. If no rule matches, the \z
-default image (fallback) is shown.\n\n\z
+default image (fallback) is shown. Rules without an image are \z
+skipped.\n\n\z
 STORAGE - IMPORTANT:\n\z
 Ethos gives each widget only about 190 characters. ALL image file \z
 names, flight modes and switches must fit in there together. With 10 \z
@@ -976,10 +979,14 @@ local function wakeup(widget)
     local newRuleIndex = nil
     for i = 1, #widget.rules do
         local rule = widget.rules[i]
-        local phaseOk = rule.allPhases or (rule.phasesSet[widget.activeFm] == true)
+        -- Regeln ohne Bild zaehlen nicht: Eine frisch angelegte Regel
+        -- gilt fuer alle Phasen und hat keinen Schalter - sie wuerde
+        -- sofort greifen und das Standard-Bild verdecken.
+        local hasImage = rule.image ~= nil and rule.image ~= ""
+        local phaseOk = hasImage and (rule.allPhases or (rule.phasesSet[widget.activeFm] == true))
         local switchOk = true
 
-        if rule.activationSwitch then
+        if phaseOk and rule.activationSwitch then
             local ok, val = pcall(function() return rule.activationSwitch:value() end)
             if ok then
                 -- value() kann je nach Quelle eine Zahl ODER einen
