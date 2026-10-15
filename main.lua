@@ -251,6 +251,16 @@ local function resetBitmaps(widget)
     widget.activeBmp = nil
 end
 
+-- requestRefresh(widget)
+-- Laesst wakeup() fuer REFRESH_WINDOW_S Sekunden bei jedem Aufruf neu
+-- zeichnen. Gebraucht nach dem Schliessen der Konfiguration - Grund
+-- steht bei write().
+local REFRESH_WINDOW_S = 2
+
+local function requestRefresh(widget)
+    widget.refreshUntil = os.clock() + REFRESH_WINDOW_S
+end
+
 -- splitString(str, sep)
 -- Zerlegt einen String an einem festen Trennzeichen. Anders als
 -- string.gmatch bleiben LEERE Felder erhalten - das ist fuer das
@@ -467,7 +477,7 @@ local function create()
         activeFm        = 0,    -- INDEX des aktuell aktiven Flugmodus
         activeRuleIndex = nil,  -- Index der aktuell greifenden Regel (nil = Fallback)
         activeBmp       = nil,  -- Bitmap-Objekt, das paint() gerade zeichnet
-        lastRefresh     = 0,    -- os.clock() des letzten Zwangs-Neuzeichnens
+        refreshUntil    = 0,    -- bis zu diesem os.clock() in jedem wakeup() neu zeichnen
         loaded          = false,-- true, sobald read() gelaufen ist
         everConfigured  = false,-- true, sobald der Nutzer etwas geaendert hat
     }
@@ -895,6 +905,14 @@ local function write(widget)
         return true
     end
 
+    -- Ethos ruft write() beim Verlassen der Konfiguration auf - es ist
+    -- das einzige Zeichen dafuer, dass sie zu ist. Auf dem Top-Display
+    -- der Tandem XE geht das Neuzeichnen verloren, das wakeup() nach
+    -- einer Bildauswahl noch bei offener Konfiguration anfordert, und
+    -- das alte Bild bliebe bis zum Modellwechsel stehen. Deshalb hier
+    -- kurz nachzeichnen, statt staendig im Takt.
+    requestRefresh(widget)
+
     local n = math.min(#widget.rules, MAX_RULES)
 
     safeWrite("cfg", packBase(widget))
@@ -925,9 +943,6 @@ end
 -- nicht ladbar war (Karte gerade belegt, Datei erst spaeter kopiert),
 -- bis zum naechsten Modellwechsel weg.
 local RETRY_S = 2
-
--- Zwangs-Neuzeichnen, siehe wakeup()
-local REFRESH_S = 1
 
 local function loadCached(widget, filename)
     local fullPath = buildPath(filename)
@@ -1001,23 +1016,13 @@ local function wakeup(widget)
     -- einer Bildauswahl ist der Cache leer, das neu geladene Objekt
     -- ist ein anderes - also wird neu gezeichnet, auch wenn der Name
     -- gleich geblieben ist oder das Laden erst im zweiten Anlauf klappt.
-    local now = os.clock()
+    -- Neu gezeichnet wird nur bei einer Aenderung - und kurz nach dem
+    -- Schliessen der Konfiguration (requestRefresh, siehe write()).
     if newRuleIndex ~= widget.activeRuleIndex or bmp ~= widget.activeBmp then
         widget.activeRuleIndex = newRuleIndex
         widget.activeBmp       = bmp
-        widget.lastRefresh     = now
         lcd.invalidate()
-
-    -- Zusaetzlich einmal pro REFRESH_S neu zeichnen. Auf dem Top-Display
-    -- der Tandem XE ging das Neuzeichnen nach einer Bildauswahl verloren,
-    -- vermutlich so: wakeup() bemerkt die Aenderung noch, waehrend die
-    -- Konfiguration offen ist, aber dieses lcd.invalidate() kommt oben nie an.
-    -- Danach gibt es keine Aenderung mehr, die ein weiteres ausloesen
-    -- wuerde, und das alte Bild stand bis zum Modellwechsel. Ein Ende
-    -- der Konfiguration meldet Ethos nicht - deshalb der Takt. Ein Bild
-    -- pro Sekunde zu zeichnen kostet praktisch nichts.
-    elseif now - widget.lastRefresh >= REFRESH_S then
-        widget.lastRefresh = now
+    elseif os.clock() < widget.refreshUntil then
         lcd.invalidate()
     end
 end
