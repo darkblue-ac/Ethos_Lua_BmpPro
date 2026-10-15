@@ -100,6 +100,32 @@ local SEP_FLD     = "|"   -- Trenner innerhalb eines Regelsatzes
 local STORAGE_BUDGET = 190
 
 -- ------------------------------------------------------------
+-- Diagnose (voruebergehend)
+--
+-- Auf dem Top-Display der Tandem XE erscheint ein neu gewaehltes Bild
+-- erst nach Modellwechsel oder Neustart. Unklar ist, ob
+--   a) das Widget oben gar nicht neu gezeichnet wird,
+--   b) das Widget oben eine ANDERE Instanz ist als die konfigurierte
+--      (oder sogar in einem eigenen Lua-Zustand laeuft) und die
+--      Aenderung erst ueber storage/read() ankommt, oder
+--   c) das Laden des Bildes scheitert.
+-- Mit DEBUG = true zeigt jedes Widget eine Kennung, den Bildnamen und
+-- Zaehler, und die Konfiguration zeigt die Kennung der Instanz, die
+-- sie gerade bearbeitet. Vergleich beider ergibt die Antwort.
+-- ------------------------------------------------------------
+local DEBUG = true
+local DBG_STATE = (math.random(100, 999) + math.floor(os.clock() * 1000)) % 900 + 100  -- je Lua-Zustand verschieden
+local dbgNextId = 0                         -- laufende Instanznummer
+
+local function dbgTag(widget)
+    return string.format("L%d#%d", DBG_STATE, widget.dbgId or 0)
+end
+
+local function dbg(widget, fmt, ...)
+    if DEBUG then print("BmpPro " .. dbgTag(widget) .. " " .. string.format(fmt, ...)) end
+end
+
+-- ------------------------------------------------------------
 -- Sprache / Uebersetzungen
 --
 -- system.getLocale() liefert den Sprachcode ("de", "en", "fr", ...).
@@ -457,6 +483,9 @@ local function create()
     end)
     if ok then fmSource = src end
 
+    dbgNextId = dbgNextId + 1
+    if DEBUG then print("BmpPro create L" .. DBG_STATE .. "#" .. dbgNextId) end
+
     return {
         rules           = {},   -- geordnete Liste von Regeln
         fallbackImage   = "",   -- Bild, wenn keine Regel passt
@@ -469,6 +498,10 @@ local function create()
         activeBmp       = nil,  -- Bitmap-Objekt, das paint() gerade zeichnet
         loaded          = false,-- true, sobald read() gelaufen ist
         everConfigured  = false,-- true, sobald der Nutzer etwas geaendert hat
+        dbgId           = dbgNextId,
+        dbgWake         = 0,
+        dbgPaint        = 0,
+        dbgLast         = 0,
     }
 end
 
@@ -502,6 +535,12 @@ function configure(widget)
     rememberFm(widget, afIdx, afName)
     ensureRulePhasesListed(widget)
 
+    if DEBUG then
+        dbg(widget, "configure")
+        local lDbg = form.addLine("Debug")
+        form.addStaticText(lDbg, nil, dbgTag(widget))
+    end
+
     local lineFallback = form.addLine(tr("fallback"))
     form.addBitmapField(lineFallback, nil, BMP_PATH,
         function() return widget.fallbackImage or "" end,
@@ -509,6 +548,7 @@ function configure(widget)
             widget.fallbackImage   = v
             widget.everConfigured  = true
             resetBitmaps(widget)
+            dbg(widget, "set fallback=%s", tostring(v))
         end)
 
     for i = 1, #widget.rules do
@@ -602,6 +642,7 @@ function configure(widget)
                     rule.image            = v
                     widget.everConfigured = true
                     resetBitmaps(widget)
+                    dbg(widget, "set rule%d=%s", idx, tostring(v))
                 end)
 
             -- "Alle Flugphasen" blendet die Flugphasen-Liste ein/aus,
@@ -952,6 +993,14 @@ end
 -- Prüft regelmäßig Flugphase + Schalterbedingungen und ermittelt
 -- die aktuell greifende Regel
 local function wakeup(widget)
+    widget.dbgWake = (widget.dbgWake or 0) + 1
+    -- Diagnose: einmal pro Sekunde neu zeichnen, damit die Zaehler
+    -- oben aktuell sind - unabhaengig davon, ob sich etwas aendert.
+    if DEBUG and os.clock() - (widget.dbgLast or 0) >= 1 then
+        widget.dbgLast = os.clock()
+        lcd.invalidate()
+    end
+
     local fmIdx, fmName = getActiveFm(widget)
     widget.activeFm = fmIdx
     rememberFm(widget, fmIdx, fmName)
@@ -1011,6 +1060,7 @@ end
 local function paint(widget)
     local w, h = lcd.getWindowSize()
     local idx  = widget.activeRuleIndex
+    widget.dbgPaint = (widget.dbgPaint or 0) + 1
 
     -- Geladen wird nur in wakeup(); paint() zeichnet, was dort bestimmt
     -- wurde. So loest erst ein erfolgreicher Ladevorgang das Neuzeichnen
@@ -1026,6 +1076,19 @@ local function paint(widget)
         local label = idx and (tr("ruleWord") .. " " .. idx) or tr("fallbackWord")
         lcd.drawText(w / 2, h / 2, label .. tr("noBitmap"), CENTERED)
     end
+
+    if DEBUG then pcall(function()
+        local name = widget.fallbackImage
+        if idx and widget.rules[idx] then name = widget.rules[idx].image end
+        local txt = string.format("%s %s %s w%d p%d", dbgTag(widget),
+            tostring(name), bmp and "ok" or "-", widget.dbgWake or 0, widget.dbgPaint)
+        lcd.font(FONT_S)
+        local tw, th = lcd.getTextSize(txt)
+        lcd.color(BLACK)
+        lcd.drawFilledRectangle(0, 0, tw + 4, th)
+        lcd.color(WHITE)
+        lcd.drawText(2, 0, txt)
+    end) end
 end
 
 -- initWidget()
