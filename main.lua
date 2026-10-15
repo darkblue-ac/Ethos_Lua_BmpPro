@@ -45,16 +45,15 @@
 --    steht im Abschnitt "Persistenz".
 --
 -- 2. DER SPEICHER IST SEHR KLEIN.
---    Gemessen auf einer Tandem XE mit Ethos 1.6.6: bei 190 Zeichen kam alles
---    vollstaendig an, bei 200 gingen die zuletzt geschriebenen Werte
---    still verloren. Deshalb ist das Speicherformat auf jedes einzelne
---    Zeichen optimiert, und deshalb sind kurze Bilddateinamen wichtig.
---    Der aktuelle Verbrauch steht in der Konfiguration unter
---    "Widget-Informationen". Laut Issue 
---    https://github.com/FrSkyRC/ETHOS-Feedback-Community/issues/5462?utm_source=copilot.com
---    sind es 200 Zeichen, aber vermutlich zählen ein paar interne 
---    Verwaltungswerte mit, die Ethos nicht anzeigt.
-
+--    Gemessen mit test/BmpTest auf einer Tandem XE, Ethos 1.6.6:
+--      - 218 Zeichen in 15 Werten kamen vollstaendig an, beim 16. Wert
+--        (233 Zeichen) gingen die zuletzt geschriebenen still verloren.
+--      - Ein einzelner Wert mit 120 Zeichen kam an, mit 190 nicht mehr.
+--    Deshalb ist das Speicherformat auf jedes Zeichen optimiert, nur
+--    Text, ein kurzer Wert je Regel - und kurze Bilddateinamen sind
+--    wichtig. Der Verbrauch steht in der Konfiguration unter
+--    "Widget-Informationen". Siehe auch
+--    https://github.com/FrSkyRC/ETHOS-Feedback-Community/issues/5462
 --
 -- Dazu kommt: Ethos kann nicht alle Flugphasen im Voraus nennen, nur
 -- die gerade aktive. Sie werden daher zur Laufzeit eingesammelt -
@@ -79,26 +78,24 @@ local INDENT    = "       "
 -- Ethos ignoriert den Schluesselnamen und arbeitet ueber die
 -- REIHENFOLGE der Aufrufe. Geschrieben wird deshalb:
 --
---   Wert 1        Basis  "7;<regelzahl>;<fallbackbild>"
---   Wert 2..N+1   die N Regeln
---   danach        je ein Wert fuer jede Regel, die einen Schalter hat
+--   Wert 1        Basis  "8;<regelzahl>;<fallbackbild>"
+--   Wert 2..N+1   die N Regeln, je ein Wert, Schalter als Text darin
 --
--- Die Regelzahl steht in Wert 1, und jede Regel sagt selbst, ob sie
--- einen Schalter hat. read() weiss dadurch vor jedem Lesevorgang
--- genau, wie viele Werte noch kommen - die Reihenfolge bleibt sicher,
--- obwohl die Anzahl variabel ist.
+-- Die Regelzahl steht in Wert 1. read() weiss dadurch vor jedem
+-- Lesevorgang genau, wie viele Werte noch kommen.
 -- ------------------------------------------------------------
-local CFG_VERSION = 7     -- Version der Speicherstruktur, wird in Wert 1 gespeichert, und muss geändert werden, wenn sich bei einer version bzgl. Speicherung was ändert.
+local CFG_VERSION = 8     -- Version der Speicherstruktur, steht in Wert 1. Bei jeder Aenderung am Format erhoehen und das alte Format in read() weiter lesen.
 local SEP_REC     = ";"   -- Trenner im Basisdatensatz
 local SEP_FLD     = "|"   -- Trenner innerhalb eines Regelsatzes
 
 -- Zeichenbudget fuer die Anzeige "Speicher x / y".
 --
--- 190 ist der auf einer Tandem XE mit Ethos 1.6.6 gemessene Wert, bei dem
--- nachweislich alles ankam - nicht die vermutete Obergrenze von rund
--- 200. Was Ethos intern fuer Verwaltung und Index abzieht, ist nicht
--- dokumentiert; die Differenz ist bewusst als Puffer stehengelassen.
-local STORAGE_BUDGET = 190
+-- Nachweislich angekommen sind 218 Zeichen in 15 Werten. BMP Pro
+-- schreibt hoechstens 11 Werte; kostet jeder Wert intern etwas, bleibt
+-- dadurch eher mehr Platz. 210 laesst einen kleinen Puffer. Seit die
+-- Schalter als Text gespeichert werden, ist die Zaehlung exakt - vorher
+-- belegten die Schalterobjekte Platz, den niemand sah.
+local STORAGE_BUDGET = 210
 
 -- ------------------------------------------------------------
 -- Sprache / Uebersetzungen
@@ -140,13 +137,14 @@ Bedingungen erfuellt sind, bestimmt das angezeigte Bild. Regeln ohne \z
 Bild werden uebersprungen. Passt keine Regel, wird das Standard-Bild \z
 (Fallback) angezeigt.\n\n\z
 SPEICHERPLATZ - WICHTIG:\n\z
-Ethos gibt jedem Widget nur rund 190 Zeichen. Da muessen ALLE \z
+Ethos gibt jedem Widget nur rund 210 Zeichen. Da muessen ALLE \z
 Bilddateinamen, Flugphasen und Schalter zusammen hineinpassen. Bei \z
-10 Regeln bleiben pro Regel nur etwa 15 Zeichen, davon gehen einige \z
-fuer Flugphasen und Trennzeichen ab.\n\n\z
+10 Regeln bleiben pro Regel etwa 19 Zeichen, davon gehen einige \z
+fuer Flugphasen, Schalter und Trennzeichen ab. Die Endung .bmp \z
+wird nicht mitgespeichert.\n\n\z
 Halte die Dateinamen deshalb kurz: \"LkwFahr.bmp\" statt \z
 \"LKW_Scania_Fahrmodus_1.bmp\". Sonst gehen beim Speichern still \z
-die zuletzt geschriebenen Werte verloren - zuerst die Schalter.\n\n\z
+die letzten Regeln verloren.\n\n\z
 Der aktuelle Verbrauch steht unter Widget-Informationen. Erscheint \z
 dort ein \"!\", passt es nicht mehr.",
         noBitmap     = ": kein Bitmap",
@@ -185,13 +183,14 @@ are met determines the displayed image. If no rule matches, the \z
 default image (fallback) is shown. Rules without an image are \z
 skipped.\n\n\z
 STORAGE - IMPORTANT:\n\z
-Ethos gives each widget only about 190 characters. ALL image file \z
+Ethos gives each widget only about 210 characters. ALL image file \z
 names, flight modes and switches must fit in there together. With 10 \z
-rules that leaves roughly 15 characters per rule, some of which go to \z
-flight modes and separators.\n\n\z
+rules that leaves roughly 19 characters per rule, some of which go to \z
+flight modes, switches and separators. The .bmp extension is not \z
+stored.\n\n\z
 So keep file names short: \"thermal.bmp\" instead of \z
-\"glider_phase_thermal.bmp\". Otherwise the values written last are \z
-silently lost when saving - the switches first.\n\n\z
+\"glider_phase_thermal.bmp\". Otherwise the last rules are \z
+silently lost when saving.\n\n\z
 Current usage is shown under Widget information. A \"!\" there means \z
 it no longer fits.",
         noBitmap     = ": no bitmap",
@@ -444,6 +443,7 @@ local function newRule()
         phasesSet        = {},
         expanded         = false, -- nur UI-Zustand, wird nicht gespeichert
         activationSwitch = nil,   -- "Aktiviert durch", wie bei Mixern (form.addSwitchField)
+        switchText       = nil,   -- gespeicherter Schalter, der sich nicht aufbauen liess
     }
 end
 
@@ -452,8 +452,11 @@ end
 local function ruleTitleText(widget, idx)
     local rule = widget.rules[idx]
     if rule == nil then return "" end
-    return string.format("%d. %s", idx,
-        (rule.image ~= "" and rule.image) or tr("noImage"))
+    -- "!" = gespeicherter Schalter liess sich nicht aufbauen, die Regel
+    -- ist gesperrt, bis unter "Aktiviert durch" neu gewaehlt wird.
+    return string.format("%d. %s%s", idx,
+        (rule.image ~= "" and rule.image) or tr("noImage"),
+        rule.switchText and "  !" or "")
 end
 
 -- ------------------------------------------------------------
@@ -658,6 +661,7 @@ function configure(widget)
                 function() return rule.activationSwitch end,
                 function(v)
                     rule.activationSwitch = v
+                    rule.switchText       = nil
                     widget.everConfigured = true
                 end)
         end
@@ -740,30 +744,31 @@ end
 -- Der Schluesselname wird von Ethos ignoriert: storage.write haengt
 -- Werte in Aufrufreihenfolge an eine Liste, storage.read liest sie in
 -- derselben Reihenfolge zurueck. Der "Schluessel" dient hier nur der
--- Lesbarkeit. Daraus folgen zwei Regeln, an denen der ganze Abschnitt
+-- Lesbarkeit. Daraus folgen drei Regeln, an denen der ganze Abschnitt
 -- haengt:
 --
 -- REGEL 1: write() und read() muessen dieselbe Anzahl Werte in
--- derselben Reihenfolge verarbeiten. Die Anzahl darf variabel sein -
--- aber beide Seiten muessen sie aus derselben gespeicherten
--- Information ableiten koennen. Deshalb steht die Regelzahl im ersten
--- Wert, und jede Regel sagt selbst, ob ein Schalterwert folgt.
+-- derselben Reihenfolge verarbeiten. Deshalb steht die Regelzahl im
+-- ersten Wert.
 --
--- REGEL 2: sparsam sein. Der Speicher fasst nur wenige hundert
--- Zeichen, und JEDER Wert kostet Platz - auch ein leerer String und
--- auch ein Schalterobjekt, das gar keine Zeichen enthaelt. Deshalb
--- wird nur geschrieben, was es wirklich gibt.
+-- REGEL 2: sparsam sein, rund 210 Zeichen fuer alles (Messung siehe
+-- Kopf). Felder mit Standardwert am Ende entfallen, ".bmp" wird nicht
+-- mitgespeichert.
 --
--- AUFBAU:
---   Wert 1        "7;<regelzahl>;<fallbackbild>"
---   Wert 2..N+1   Regel: "<bild>|<flags>|<phasenmaske>"
---   danach        je ein Schalterobjekt, in aufsteigender Regelnummer,
---                 nur fuer Regeln mit Schalter
+-- REGEL 3: nur Text, ein Wert je Regel. Frueher (Format 7) folgten die
+-- Schalter als Objekte am Ende. Die kosteten Platz, den keine Anzeige
+-- zaehlen konnte, und gingen bei vollem Speicher als erste verloren -
+-- die Regel griff dann ohne Bedingung. Jetzt steckt der Schalter in
+-- seiner Regel: geht etwas verloren, dann die ganze Regel.
 --
---   <flags> ist eine Ziffer: 1 = alle Flugphasen, 2 = hat Schalter,
---   also 0..3. Fehlt das Feld, gilt 1. Felder mit Standardwert am
---   Ende entfallen: "bild.bmp" allein heisst alle Phasen, kein
---   Schalter.
+-- AUFBAU (Format 8):
+--   Wert 1        "8;<regelzahl>;<fallbackbild>"
+--   Wert 2..N+1   Regel: "<bild>|<flags>|<phasenmaske>|<schalter>"
+--
+--   <bild>      Dateiname, ".bmp" weggelassen (siehe encodeImage)
+--   <flags>     1 = alle Flugphasen, 0 = nur die gewaehlten; fehlt: 1
+--   <schalter>  "<kategorie>.<nummer>[.<optionen>]" (siehe encodeSwitch)
+--   "bild" allein heisst also: alle Phasen, kein Schalter.
 -- ============================================================
 
 -- sanitizeField(s)
@@ -776,26 +781,90 @@ local function sanitizeField(s)
     return s
 end
 
+-- encodeImage(name) / decodeImage(str)
+-- ".bmp" kostet bei 11 Bildern 44 der rund 210 Zeichen. Gespeichert
+-- wird daher:
+--   "kran.bmp" -> "kran"       (kein Punkt mehr: Endung war .bmp)
+--   "kran.png" -> "kran.png"   (andere Endungen bleiben stehen)
+--   "a.b.bmp"  -> "a.b.bmp"    (Punkt im Namen: sonst nicht eindeutig)
+--   "kran"     -> "kran."      (ohne Endung: Punkt als Kennung)
+local function encodeImage(name)
+    name = sanitizeField(name)
+    if name == "" then return "" end
+    local stem = name:match("^(.*)%.bmp$")
+    if stem and stem ~= "" and not stem:find(".", 1, true) then return stem end
+    if not name:find(".", 1, true) then return name .. "." end
+    return name
+end
+
+local function decodeImage(str)
+    if str == nil or str == "" then return "" end
+    if str:sub(-1) == "." then return str:sub(1, -2) end
+    if not str:find(".", 1, true) then return str .. ".bmp" end
+    return str
+end
+
+-- encodeSwitch(sw) / decodeSwitch(str)
+-- Ein Schalter wird als Kategorie, Nummer und Optionen gespeichert und
+-- mit system.getSource() wieder aufgebaut. Auf der Tandem XE geprueft
+-- (test/BmpTest): "10.0" Schalterstellung, "10.24.1" dieselbe
+-- invertiert, "13.4" logischer Schalter - der Nachbau lief jeweils
+-- identisch mit dem Original.
+--
+-- Laesst sich ein Schalter nicht beschreiben, wird "?" gespeichert:
+-- Die Regel bleibt dann gesperrt, statt den Schalter stillschweigend zu
+-- verlieren und ohne Bedingung zu greifen.
+local function callNum(obj, method)
+    local ok, v = pcall(function() return obj[method](obj) end)
+    if ok and type(v) == "number" then return math.floor(v) end
+    return nil
+end
+
+local function encodeSwitch(sw)
+    local c, m = callNum(sw, "category"), callNum(sw, "member")
+    if c == nil or m == nil then return "?" end
+    local o = callNum(sw, "options")
+    if o and o ~= 0 then return string.format("%d.%d.%d", c, m, o) end
+    return string.format("%d.%d", c, m)
+end
+
+local function decodeSwitch(str)
+    local c, m, o = str:match("^(%-?%d+)%.(%-?%d+)%.?(%-?%d*)$")
+    if c == nil then return nil end
+    local spec = { category = tonumber(c), member = tonumber(m) }
+    if o ~= "" then spec.options = tonumber(o) end
+    local ok, src = pcall(function() return system.getSource(spec) end)
+    if ok then return src end
+    return nil
+end
+
+-- ruleSwitchText(rule) -> Text fuer den Speicher, "" ohne Schalter
+local function ruleSwitchText(r)
+    if r.activationSwitch ~= nil then return encodeSwitch(r.activationSwitch) end
+    return r.switchText or ""
+end
+
 -- packBase(widget) -> string
 local function packBase(widget)
     return table.concat({
         tostring(CFG_VERSION),
         tostring(math.min(#widget.rules, MAX_RULES)),
-        sanitizeField(widget.fallbackImage),
+        encodeImage(widget.fallbackImage),
     }, SEP_REC)
 end
 
 -- packRule(rule) -> string
 local function packRule(r)
-    local img  = sanitizeField(r.image)
-    local mask = buildPhasesMask(r.phasesSet)
-    local flags = 0
-    if r.allPhases then flags = flags + 1 end
-    if r.activationSwitch ~= nil then flags = flags + 2 end
+    local img   = encodeImage(r.image)
+    local flags = r.allPhases and "1" or "0"
+    local mask  = buildPhasesMask(r.phasesSet)
+    local sw    = ruleSwitchText(r)
 
-    if mask ~= "" then
-        return img .. SEP_FLD .. flags .. SEP_FLD .. mask
-    elseif flags ~= 1 then
+    if sw ~= "" then
+        return table.concat({ img, flags, mask, sw }, SEP_FLD)
+    elseif mask ~= "" then
+        return table.concat({ img, flags, mask }, SEP_FLD)
+    elseif flags ~= "1" then
         return img .. SEP_FLD .. flags
     elseif img == "" then
         -- Eine noch leere Regel darf keinen leeren String ergeben:
@@ -805,22 +874,32 @@ local function packRule(r)
     return img
 end
 
--- unpackRule(str) -> rule
-local function unpackRule(str)
+-- unpackRule(str, version) -> rule
+-- Format 7 kannte keinen Schalter im Satz, nur Bit 2 in <flags> als
+-- Hinweis, dass ein Schalterobjekt am Ende folgt.
+local function unpackRule(str, version)
     local p     = splitString(str or "", SEP_FLD)
     local flags = math.floor(tonumber(p[2]) or 1)
-    return {
-        image            = p[1] or "",
+    local r = {
+        image            = (version == 7) and (p[1] or "") or decodeImage(p[1]),
         allPhases        = ((flags & 1) == 1),
-        hasSwitch        = ((flags & 2) == 2),   -- nur waehrend read()
         phasesSet        = parsePhasesMask(p[3] or ""),
         expanded         = false,
         activationSwitch = nil,
+        switchText       = nil,
     }
+    if version == 7 then
+        r.hasSwitch = ((flags & 2) == 2)   -- nur waehrend read()
+    elseif (p[4] or "") ~= "" then
+        r.activationSwitch = decodeSwitch(p[4])
+        if r.activationSwitch == nil then r.switchText = p[4] end
+    end
+    return r
 end
 
 -- storageUsage(widget) -> Zeichen
--- Rechnet nach, wie viele Zeichen write() erzeugen wuerde.
+-- Rechnet nach, wie viele Zeichen write() erzeugen wuerde. Seit es nur
+-- noch Text gibt, ist das der ganze Verbrauch.
 function storageUsage(widget)
     local chars = #packBase(widget)
     for i = 1, math.min(#widget.rules, MAX_RULES) do
@@ -839,8 +918,8 @@ end
 
 -- read(widget)
 -- Liest genau so viele Werte, wie write() geschrieben hat: erst die
--- Basis, daraus die Regelzahl, dann die Regeln, und daraus wiederum,
--- wie viele Schalterwerte folgen.
+-- Basis, daraus Format und Regelzahl, dann die Regeln. Format 7 wird
+-- weiter gelesen und beim naechsten Speichern als Format 8 geschrieben.
 local function read(widget)
     local function rd(label)
         local ok, v = pcall(function() return storage.read(label) end)
@@ -858,11 +937,12 @@ local function read(widget)
     widget.fallbackImage = ""
 
     -- ---- Wert 1: Basis
-    local parts = splitString(rdStr("cfg"), SEP_REC)
-    local count = 0
-    if (tonumber(parts[1]) or 0) == CFG_VERSION then
+    local parts   = splitString(rdStr("cfg"), SEP_REC)
+    local version = tonumber(parts[1]) or 0
+    local count   = 0
+    if version == CFG_VERSION or version == 7 then
         count                = tonumber(parts[2]) or 0
-        widget.fallbackImage = parts[3] or ""
+        widget.fallbackImage = (version == 7) and (parts[3] or "") or decodeImage(parts[3])
     end
     if count < 0 then count = 0 end
     if count > MAX_RULES then count = MAX_RULES end
@@ -872,16 +952,15 @@ local function read(widget)
         local rec = rdStr("r" .. i)
         -- Ein leerer Wert heisst: der Speicher ist beim Schreiben
         -- ausgegangen. Hier abbrechen statt eine leere Regel
-        -- einzusetzen - die wuerde zur Laufzeit auf jede Flugphase
-        -- passen und alle folgenden Regeln blockieren.
+        -- einzusetzen.
         if rec == "" then break end
-        widget.rules[i] = unpackRule(rec)
+        widget.rules[i] = unpackRule(rec, version)
     end
 
-    -- ---- danach: ein Schalter je Regel, die einen hat.
-    -- Wurde oben abgebrochen, sind auch die Schalterwerte nicht mehr
-    -- verlaesslich - dann werden sie gar nicht erst gelesen.
-    if #widget.rules == count then
+    -- ---- nur Format 7: danach ein Schalterobjekt je Regel, die einen
+    -- hat. Wurde oben abgebrochen, sind auch die Schalterwerte nicht
+    -- mehr verlaesslich - dann werden sie gar nicht erst gelesen.
+    if version == 7 and #widget.rules == count then
         for i = 1, #widget.rules do
             local r = widget.rules[i]
             if r.hasSwitch then
@@ -892,7 +971,12 @@ local function read(widget)
             end
         end
     end
-    for _, r in ipairs(widget.rules) do r.hasSwitch = nil end
+    -- Ein Schalter, der laut Regel da sein muesste, aber fehlt, sperrt
+    -- die Regel - in Format 7 griff sie dann ohne Bedingung.
+    for _, r in ipairs(widget.rules) do
+        if r.hasSwitch and r.activationSwitch == nil then r.switchText = "?" end
+        r.hasSwitch = nil
+    end
 
     -- Benutzte Flugphasen sichtbar halten (Namen werden nicht
     -- gespeichert; sie erscheinen als "FM<n>" bis zum ersten Auftreten)
@@ -926,17 +1010,9 @@ local function write(widget)
     -- kurz nachzeichnen, statt staendig im Takt.
     requestRefresh(widget)
 
-    local n = math.min(#widget.rules, MAX_RULES)
-
     safeWrite("cfg", packBase(widget))
-    for i = 1, n do
+    for i = 1, math.min(#widget.rules, MAX_RULES) do
         safeWrite("r" .. i, packRule(widget.rules[i]))
-    end
-    for i = 1, n do
-        local sw = widget.rules[i].activationSwitch
-        if sw ~= nil then
-            safeWrite("sw" .. i, sw)
-        end
     end
 
     return true
@@ -994,7 +1070,9 @@ local function wakeup(widget)
         -- sofort greifen und das Standard-Bild verdecken.
         local hasImage = rule.image ~= nil and rule.image ~= ""
         local phaseOk = hasImage and (rule.allPhases or (rule.phasesSet[widget.activeFm] == true))
-        local switchOk = true
+        -- Ein gespeicherter Schalter, den es nicht (mehr) gibt, sperrt
+        -- die Regel, statt sie bedingungslos greifen zu lassen.
+        local switchOk = rule.switchText == nil
 
         if phaseOk and rule.activationSwitch then
             local ok, val = pcall(function() return rule.activationSwitch:value() end)

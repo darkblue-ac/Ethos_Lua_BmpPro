@@ -50,13 +50,14 @@ Note: ETHOS only reports the currently active flight mode to the widget. To make
 
 ## Storage limit and sizing
 
-ETHOS widgets have a very small storage budget. In practice, the available space for this widget is only around 190 characters, which must hold all bitmap file names, flight modes, and switch settings together.
+ETHOS widgets have a very small storage budget. Measured on a Tandem XE with ETHOS 1.6.6, the space for this widget is around 210 characters, which must hold all bitmap file names, flight modes, and switch settings together. The `.bmp` extension is not stored.
 
 Because of that:
 
 - Keep bitmap file names short and descriptive, for example `thermal.bmp` instead of a long path-like name.
-- Be aware that if the configuration becomes too large, the widget may silently drop the last written values when saving, especially switch-related settings.
-- The widget shows the current storage usage in its information screen. If it displays `!`, the current setup no longer fits within the available storage.
+- If the configuration becomes too large, the last rules are silently dropped when saving.
+- The widget shows the current storage usage in its information screen. Switches are stored as text and counted exactly. If it displays `!`, the current setup no longer fits within the available storage.
+- A rule marked with `!` in its header has a stored switch that no longer exists. It stays inactive until you select the switch again.
 
 For best results, keep configurations compact and use short filenames to stay safely within the available storage budget.
 
